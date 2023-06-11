@@ -1,0 +1,18 @@
+# Ignore folders
+__pycache__/
+build/
+develop-eggs/
+dist/
+downloads/
+lib/
+lib64/
+data/
+
+# Distribution / packaging
+.Python
+
+
+project-3_v3_ru.ipynb
+
+# Models
+*.pkl
