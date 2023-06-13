@@ -11,10 +11,11 @@
 ---
 
 ## Summary
-
+[Competition](https://www.kaggle.com/competitions/nyc-taxi-trip-duration/data)
   
 
 ## Project description
+
 High competition in the fintech industry pushes companies to innovate. The *LendingClub* company is the first firm in the US providing peer-to-peer loans between private customers. In addition, the company trades loans on a secondary market. A combination of practical and attractive website, and low interest rates assured fast growth of the client base. This, however, resulted in increase of defaults on the loan repayments rate since current algorythm of the default probability calculation has to be constantly tuned. 
 
 The business objective of the assignment is to identify factors, increasing credit loss of the company such as:
