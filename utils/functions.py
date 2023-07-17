@@ -52,3 +52,159 @@ def read_csv_from_zip(path:str=config.data_dir, exclusion:dict=None, index_col=N
 #                     mounts[f"{file[:-4]}".format(file)] =  pd.read_csv(myzip.open(file), sep=';')
                     
 #     return mounts
+
+
+def add_datetime_features(data:pd.DataFrame)->pd.DataFrame:
+    """Добавляет 3 признака: дата включения счетчика - начала поездки (без времени),\
+        час дня включения счетчика,  наименование дня недели, в который был включен счетчик
+
+    Args:
+        data (pd.DataFrame): _description_
+
+    Returns:
+        pd.DataFrame: _description_
+    """    
+    data['pickup_date'] = data['pickup_datetime'].dt.date
+    data['pickup_hour'] = data['pickup_datetime'].dt.hour
+    data['pickup_day_of_week'] = data['pickup_datetime'].dt.dayofweek 
+    data['pickup_day_of_week'] = data['pickup_day_of_week'].astype('category').cat\
+        .rename_categories({0:'Mon',1:'Tue',2:'wed', 3:'Thu',4:'Fri',5:'Sat',6:'Sun'}).astype('category')
+        
+    return data
+
+
+def add_holiday_features(data:pd.DataFrame, holiday_data:pd.DataFrame)->pd.DataFrame:
+    """ Добавляем признак совершения поездки в праздничный день (1 - да, 0 - нет). 
+
+    Args:
+        data (pd.DataFrame): датафрейм с даннными о поездках
+        holidays (pd.DataFrame): массив с датами праздников США
+
+    Returns:
+        pd.DataFrame: массив даннных о поездках с признаком поездки в праздник
+    """
+    # даты праздников
+    days_off = holiday_data['date'].values 
+    
+    # даты в строковый формат
+    data['pickup_date_str'] = data['pickup_date'].apply(lambda x: x.strftime("%Y-%m-%d"))
+    data['pickup_holiday'] = data['pickup_date_str'].apply(lambda x: 1 if x in days_off else 0)
+    data.drop(['pickup_date_str'], axis=1, inplace=True)
+             
+    return data
+
+
+def add_osrm_features(data:pd.DataFrame, osrm_data:pd.DataFrame)->pd.DataFrame:
+    """ Объединяет 2 датафрейма. В результате добавляет к data признаки: 
+            total_distance,  total_travel_time, number_of_steps.
+
+    Args:
+        data (pd.DataFrame): датафрейм с даннными о поездках
+        osrm_data (pd.DataFrame): датафрейм с даннными о кратчайшем пути
+
+    Returns:
+        pd.DataFrame: объединённый датафрейм, в который добавлены признаки : \
+            total_distance,  total_travel_time, number_of_steps.
+    """    
+    data = data.merge(osrm_data, how='left', on='id')
+    return data
+
+
+def get_haversine_distance(lat1, lng1, lat2, lng2):
+    # переводим углы в радианы
+    lat1, lng1, lat2, lng2 = map(np.radians, (lat1, lng1, lat2, lng2))
+    # радиус земли в километрах
+    EARTH_RADIUS = 6371 
+    # считаем кратчайшее расстояние h по формуле Хаверсина
+    lat_delta = lat2 - lat1
+    lng_delta = lng2 - lng1
+    d = np.sin(lat_delta * 0.5) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(lng_delta * 0.5) ** 2
+    h = 2 * EARTH_RADIUS * np.arcsin(np.sqrt(d))
+    return h
+
+
+def get_angle_direction(lat1, lng1, lat2, lng2):
+    # переводим углы в радианы
+    lat1, lng1, lat2, lng2 = map(np.radians, (lat1, lng1, lat2, lng2))
+    # считаем угол направления движения alpha по формуле угла пеленга
+    lng_delta_rad = lng2 - lng1
+    y = np.sin(lng_delta_rad) * np.cos(lat2)
+    x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(lng_delta_rad)
+    alpha = np.degrees(np.arctan2(y, x))
+    return alpha
+
+def add_geographical_features(data:pd.DataFrame)->pd.DataFrame:
+    """Ддобавляет 2 признака в неё двумя столбцами:
+
+    haversine_distance — расстояние Хаверсина между точками влючёния и выключения счетчика;
+    direction — направление движения между точками влючёния и выключения счетчика;
+    Args:
+        data (pd.DataFrame): _description_
+
+    Returns:
+        pd.DataFrame: _description_
+    """    
+    data['haversine_distance'] = data.apply(lambda x: get_haversine_distance(\
+        x['pickup_latitude'],  x['pickup_longitude'], \
+        x['dropoff_latitude'], x['dropoff_longitude']), axis=1)
+    
+    data['direction'] = data.apply(lambda x: get_angle_direction(\
+        x['pickup_latitude'],  x['pickup_longitude'], \
+        x['dropoff_latitude'], x['dropoff_longitude']), axis=1)
+                         
+    return data
+
+def add_cluster_features(data:pd.DataFrame, cluster)->pd.DataFrame:
+    """Add cluster feature to dataframe
+
+    Args:
+        data (pd.DataFrame): _description_
+        cluster (_type_):cluster feature
+
+    Returns:
+        (pd.DataFrame): joined dataframe
+    """    
+    coordinats = np.hstack((data[['pickup_latitude', 'pickup_longitude']], data[['dropoff_latitude', 'dropoff_longitude']]))
+
+    data['geo_cluster'] = cluster.predict(coordinats)
+    return data
+
+def add_weather_features(data:pd.DataFrame, weather:pd.DataFrame)->pd.DataFrame:
+    """add weather feature
+
+    Args:
+        data (pd.DataFrame): original dataframe
+        weather (_type_): frature from the weather dataframe
+
+    Returns:
+        pd.DataFrame: joined dataframe
+    """    
+    weather['time'] = pd.to_datetime(weather['time'])
+    weather['date'] = weather['time'].dt.date
+    weather['hour'] = weather['time'].dt.hour
+
+    data = pd.merge(data, weather[[\
+        'date', 'hour', 'temperature', 'visibility', 'wind speed', 'precip', 'events']],
+        left_on=['pickup_date','pickup_hour'], right_on=['date', 'hour'], how='left')
+
+    data = data.drop(columns=['date', 'hour'], axis=1)
+ 
+    return data
+
+
+def fill_null_weather_data(data:pd.DataFrame)->pd.DataFrame:
+    """Fill missed weather data
+
+    Returns:
+        (pd.DataFrame): fully filled dataframe without missing data entries
+    """    
+    for col in ['temperature', 'visibility', 'wind speed', 'precip']:
+        data[col].fillna(data.groupby('pickup_date')[col].transform('median'), inplace=True)
+    
+    for col in ['total_distance', 'total_travel_time', 'number_of_steps']:
+        data[col].fillna(data[col].median(), inplace=True)
+        
+    data['events'].fillna('None', inplace=True)
+     
+    return data
+
