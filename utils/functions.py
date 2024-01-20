@@ -8,6 +8,7 @@ from utils.config_reader import config_reader
 # from sklearn.metrics import roc_curve, roc_auc_score
 from zipfile import ZipFile
 
+import matplotlib.pyplot as plt
 
 
 
@@ -208,3 +209,45 @@ def fill_null_weather_data(data:pd.DataFrame)->pd.DataFrame:
      
     return data
 
+history = dict()
+
+def plot_history(history:dict=history, model_name:str=None, plot_counter:int=None):
+    """Training history visualization
+    
+    Аргументы:
+    history (keras.callbacks.History) - Training history data,
+    model_name (str) - figure title. Use: model.name
+    plot_counter (int) - figure id.      
+    """
+    mse_metric = history.history['mse'] 
+    mse_val = history.history['val_mse']  # validation sample
+        
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
+    epochs = range(len(mse_metric))
+
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(11, 5))
+
+    ax[0].plot(epochs, loss, 'b', label='Training')
+    ax[0].plot(epochs, val_loss, 'r', label='Validation')
+    ax[0].set_xlabel('Epoch', size=11)
+    ax[0].set_ylabel('Loss', size=11)
+    ax[0].set_title('Loss')
+    ax[0].legend(['train', 'val'])
+
+    ax[1].plot(epochs, mse_metric, 'b', label='Training')
+    ax[1].plot(epochs, mse_val, 'r', label='Validation')
+    ax[1].set_xlabel('Epoch', size=11)
+    ax[1].set_ylabel('MSE value', size=11)
+    ax[1].set_title(f"MSE")
+    ax[1].legend(['train', 'val'])
+
+    if plot_counter is not None:
+        plt.suptitle(f"Fig.{plot_counter} - {model_name} model", y=0.05, fontsize=14)
+        #plt.savefig(config.PATH_FIGURES + f'fig_{plot_counter}.png')
+    
+    else: 
+        plot_counter = 1
+        plt.suptitle(f"Fig.{plot_counter} - {model_name} model", y=-0.1, fontsize=14)  
+    plt.tight_layout();
